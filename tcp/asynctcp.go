@@ -39,9 +39,8 @@ type AsyncTCPServer struct {
 }
 
 // NewAsyncTCPServer creates a new AsyncTCPServer instance.
-func NewAsyncTCPServer(tcpAddr string, callback CallBack, protocol Protocol) *AsyncTCPServer {
+func NewAsyncTCPServer(callback CallBack, protocol Protocol) *AsyncTCPServer {
 	return &AsyncTCPServer{
-		tcpAddr:  tcpAddr,
 		callback: callback,
 		protocol: protocol,
 		bucket:   NewTCPConnBucket(),
@@ -50,8 +49,8 @@ func NewAsyncTCPServer(tcpAddr string, callback CallBack, protocol Protocol) *As
 }
 
 // ListenAndServe starts the server and listens for incoming connections.
-func (srv *AsyncTCPServer) ListenAndServe() error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", srv.tcpAddr)
+func (srv *AsyncTCPServer) Run(port string) error {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", port)
 	if err != nil {
 		return err
 	}

@@ -30,7 +30,6 @@ func NewQueue() *Queue {
 
 	go func() {
 		for msg := range qu.chanHandler {
-			fmt.Print(msg)
 			qu.processMsg(msg)
 		}
 	}()
