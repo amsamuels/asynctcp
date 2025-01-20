@@ -16,7 +16,8 @@ func main() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	queue := message.NewQueue()
-	callback := echo.NewEchoCallback(queue)
+	connBucket := tcp.NewTCPConnBucket()
+	callback := echo.NewEchoCallback(queue, connBucket)
 
 	srv := tcp.NewAsyncTCPServer(callback, &echo.EchoProtocol{})
 

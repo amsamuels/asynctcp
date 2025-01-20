@@ -11,17 +11,27 @@ import (
 // vet the connections and make sure it is a secure connection
 
 type EchoCallback struct {
-	queue *message.Queue // Message queue instance.
+	queue      *message.Queue // Message queue instance.
+	connBucket *tcp.TCPConnBucket
 }
 
-func NewEchoCallback(queue *message.Queue) *EchoCallback {
-	return &EchoCallback{queue: queue}
+func NewEchoCallback(queue *message.Queue, connBucket *tcp.TCPConnBucket) *EchoCallback {
+	return &EchoCallback{
+		queue:      queue,
+		connBucket: connBucket,
+	}
 }
 
 func (ec *EchoCallback) OnConnected(conn *tcp.TCPConn) {
-	//conn.setReadDeadline(time.Second * 300)
 	log.Println("new conn: ", conn.GetRemoteIPAddress())
+	ec.connBucket.Put(conn.GetRemoteIPAddress(), conn)
 }
+
+func (ec *EchoCallback) OnDisconnected(conn *tcp.TCPConn) {
+	log.Printf("%s disconnected\n", conn.GetRemoteIPAddress())
+	ec.connBucket.Delete(conn.GetRemoteIPAddress())
+}
+
 func (ec *EchoCallback) OnMessage(conn *tcp.TCPConn, p tcp.Packet) {
 	message := string(p.Bytes()) // Convert the packet to a string.
 
@@ -46,16 +56,14 @@ func (ec *EchoCallback) OnMessage(conn *tcp.TCPConn, p tcp.Packet) {
 		}
 		topic, message := topicAndMessage[0], topicAndMessage[1]
 		log.Printf("Publishing to topic: %s, message: %s", topic, message)
-		ec.queue.PUB(topic, message)
+		Subscribers, _ := ec.queue.PUB(topic)
+		ec.respondToAllSubs(Subscribers, ""+message+"\n")
 	case "UNS":
 		ec.queue.UNSUB(conn.GetRemoteIPAddress(), data)
 		ec.respondWithSuccess(conn, "Unsubscribed from topic: "+data+"\n")
 	default:
 		ec.respondWithError(conn, "Unknown command: "+command+"\n")
 	}
-}
-func (ec *EchoCallback) OnDisconnected(conn *tcp.TCPConn) {
-	log.Printf("%s disconnected\n", conn.GetRemoteIPAddress())
 }
 
 func (ec *EchoCallback) OnError(err error) {
@@ -73,5 +81,21 @@ func (ec *EchoCallback) respondWithSuccess(conn *tcp.TCPConn, successMessage str
 	pkt := tcp.NewDefaultPacket(tcp.TypeMessage, []byte(successMessage))
 	if err := conn.AsyncWritePacket(pkt); err != nil {
 		log.Printf("Failed to send success response to client: %v", err)
+	}
+}
+
+func (ec *EchoCallback) respondToAllSubs(addresses []string, message string) {
+	pkt := tcp.NewDefaultPacket(tcp.TypeMessage, []byte(message))
+
+	for _, address := range addresses {
+		conn := ec.connBucket.GetByAddress(address)
+		if conn == nil {
+			log.Printf("No connection found for address: %s", address)
+			continue
+		}
+
+		if err := conn.AsyncWritePacket(pkt); err != nil {
+			log.Printf("Failed to send message to address %s: %v", address, err)
+		}
 	}
 }

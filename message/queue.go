@@ -84,8 +84,8 @@ func (qu *Queue) SUB(clientID, topic string) error {
 	return resp.Error
 }
 
-func (qu *Queue) PUB(topic, message string) ([]string, error) {
-	msg := Handler{Action: "PUB", Topic: topic, Message: message, Res: make(chan Response)}
+func (qu *Queue) PUB(topic string) ([]string, error) {
+	msg := Handler{Action: "PUB", Topic: topic, Res: make(chan Response)}
 	qu.chanHandler <- msg
 	resp := <-msg.Res
 	return resp.Subscribers, resp.Error

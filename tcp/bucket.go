@@ -35,6 +35,13 @@ func (b *TCPConnBucket) Get(id string) *TCPConn {
 	return b.m[id]
 }
 
+// Get retrieves a connection by its ID.
+func (b *TCPConnBucket) GetByAddress(address string) *TCPConn {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.m[address]
+}
+
 // Delete removes a connection from the bucket by its ID.
 func (b *TCPConnBucket) Delete(id string) {
 	b.mu.Lock()
