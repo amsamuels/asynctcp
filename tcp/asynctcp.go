@@ -2,6 +2,7 @@
 package tcp
 
 import (
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -96,7 +97,8 @@ func (srv *AsyncTCPServer) serve() {
 		default:
 			conn, err := srv.listener.AcceptTCP()
 			if err != nil {
-				if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				var netErr net.Error
+				if errors.As(err, &netErr) && netErr.Timeout() {
 					logger.Println("Temporary accept error, retrying:", err)
 					time.Sleep(50 * time.Millisecond)
 					continue

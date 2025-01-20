@@ -10,6 +10,9 @@ type EchoProtocol struct {
 	data []byte
 }
 
+func (ep *EchoProtocol) ToSwitch() {
+
+}
 func (ep *EchoProtocol) Bytes() []byte {
 	return ep.data
 }

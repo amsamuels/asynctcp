@@ -11,6 +11,12 @@ type Packet interface {
 
 type PacketType byte
 
+const (
+	TypeCommand PacketType = iota // Represents a command packet.
+	TypeMessage                   // Represents a message packet.
+	TypeError                     // Represents an error packet.
+)
+
 type DefaultPacket struct {
 	Type PacketType
 	Body []byte

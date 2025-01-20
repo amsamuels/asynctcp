@@ -4,7 +4,7 @@ import "fmt"
 
 // Queue represents a message queue with multiple named channels.
 type Queue struct {
-	channels    map[string]map[chan string]struct{} // Channels with ordered messages.
+	channels    map[string]map[string]struct{} // Channels with ordered messages.
 	chanHandler chan Handler
 }
 
@@ -15,16 +15,21 @@ const (
 )
 
 type Handler struct {
-	Action  string
-	SUBS    chan string
-	Topic   string
-	Message string
-	Res     chan error
+	Action          string
+	RemoteIPAddress string // Remote address of the subscriber.
+	Topic           string
+	Message         string
+	Res             chan Response
+}
+
+type Response struct {
+	Error       error
+	Subscribers []string // List of subscriber IDs (for PUB action).
 }
 
 func NewQueue() *Queue {
 	qu := &Queue{
-		channels:    make(map[string]map[chan string]struct{}, 0),
+		channels:    make(map[string]map[string]struct{}, 0),
 		chanHandler: make(chan Handler),
 	}
 
@@ -39,45 +44,56 @@ func NewQueue() *Queue {
 
 func (qu *Queue) processMsg(msg Handler) {
 	switch msg.Action {
-	case S:
-		if qu.channels[msg.Topic] != nil {
-			qu.channels[msg.Topic][msg.SUBS] = struct{}{}
-			msg.Res <- nil
-			return
-		}
-	case P:
+	case "SUB":
 		if qu.channels[msg.Topic] == nil {
-			msg.Res <- fmt.Errorf("chan doesn't exist ")
+			qu.channels[msg.Topic] = make(map[string]struct{})
+		}
+		qu.channels[msg.Topic][msg.RemoteIPAddress] = struct{}{}
+		msg.Res <- Response{Error: nil}
+
+	case "PUB":
+		if qu.channels[msg.Topic] == nil {
+			msg.Res <- Response{Error: fmt.Errorf("topic %s doesn't exist", msg.Topic)}
 			return
 		}
 
-		for ch := range qu.channels[msg.Topic] {
-			ch <- msg.Message
+		subscribers := make([]string, 0)
+		for id := range qu.channels[msg.Topic] {
+			subscribers = append(subscribers, id)
 		}
-	case UN:
+		msg.Res <- Response{Error: nil, Subscribers: subscribers}
+
+	case "UNSUB":
 		if qu.channels[msg.Topic] != nil {
-			delete(qu.channels[msg.Topic], msg.SUBS)
+			delete(qu.channels[msg.Topic], msg.RemoteIPAddress)
+			if len(qu.channels[msg.Topic]) == 0 {
+				delete(qu.channels, msg.Topic) // Cleanup empty topics.
+			}
+			msg.Res <- Response{Error: nil}
 			return
 		}
-		msg.Res <- fmt.Errorf("not subbed to topic")
+		msg.Res <- Response{Error: fmt.Errorf("ID %s is not subscribed to topic %s", msg.RemoteIPAddress, msg.Topic)}
 	}
-
 }
 
-func (qu *Queue) SUB(clientID chan string, channel string) error {
-	var msg = Handler{Action: S, SUBS: clientID, Topic: channel}
+// Public methods for the Queue
+func (qu *Queue) SUB(clientID, topic string) error {
+	msg := Handler{Action: "SUB", RemoteIPAddress: clientID, Topic: topic, Res: make(chan Response)}
 	qu.chanHandler <- msg
-	return <-msg.Res
+	resp := <-msg.Res
+	return resp.Error
 }
 
-func (qu *Queue) PUB(channel string, message string) error {
-	var msg = Handler{Action: P, Topic: channel, Message: message}
+func (qu *Queue) PUB(topic, message string) ([]string, error) {
+	msg := Handler{Action: "PUB", Topic: topic, Message: message, Res: make(chan Response)}
 	qu.chanHandler <- msg
-	return <-msg.Res
+	resp := <-msg.Res
+	return resp.Subscribers, resp.Error
 }
 
-func (qu *Queue) UNSUB(clientID chan string, channel string) error {
-	var msg = Handler{Action: UN, SUBS: clientID, Topic: channel}
+func (qu *Queue) UNSUB(clientID, topic string) error {
+	msg := Handler{Action: "UNSUB", RemoteIPAddress: clientID, Topic: topic, Res: make(chan Response)}
 	qu.chanHandler <- msg
-	return <-msg.Res
+	resp := <-msg.Res
+	return resp.Error
 }
