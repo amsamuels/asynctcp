@@ -18,8 +18,8 @@ func main() {
 	queue := message.NewQueue()
 	connBucket := tcp.NewTCPConnBucket()
 	callback := echo.NewEchoCallback(queue, connBucket)
-
-	srv := tcp.NewAsyncTCPServer(callback, &echo.EchoProtocol{})
+	var proto echo.EchoProtocol
+	srv := tcp.NewAsyncTCPServer(callback, &proto)
 
 	log.Println("start listen...")
 	log.Println(srv.Run("localhost:9001"))
